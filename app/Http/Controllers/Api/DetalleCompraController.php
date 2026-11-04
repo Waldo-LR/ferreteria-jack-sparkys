@@ -4,62 +4,35 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DetalleCompra;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class DetalleCompraController extends Controller
 {
-    public function index()
+    public function index(): JsonResponse
     {
-        $data = DetalleCompra::all();
+        $data = DetalleCompra::query()
+            ->with([
+                'compra:id_compra,numero_comprobante,fecha_compra,total',
+                'producto:id_producto,codigo,nombre',
+            ])
+            ->latest('id_detalle_compra')
+            ->paginate(50);
+
         return response()->json([
             'status' => 'success',
-            'data' => $data
-        ], 200);
+            'data' => $data,
+        ]);
     }
 
-    public function store(Request $request)
+    public function show(int $id): JsonResponse
     {
-        $item = DetalleCompra::create($request->all());
+        $detalle = DetalleCompra::query()
+            ->with(['compra', 'producto'])
+            ->findOrFail($id);
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Registro creado correctamente.',
-            'data' => $item
-        ], 201);
-    }
-
-    public function show($id)
-    {
-        $item = DetalleCompra::find($id);
-        if (!$item) {
-            return response()->json(['status' => 'error', 'message' => 'Registro no encontrado.'], 404);
-        }
-        return response()->json(['status' => 'success', 'data' => $item], 200);
-    }
-
-    public function update(Request $request, $id)
-    {
-        $item = DetalleCompra::find($id);
-        if (!$item) {
-            return response()->json(['status' => 'error', 'message' => 'Registro no encontrado.'], 404);
-        }
-        $item->update($request->all());
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Registro actualizado correctamente.',
-            'data' => $item
-        ], 200);
-    }
-
-    public function destroy($id)
-    {
-        $item = DetalleCompra::find($id);
-        if (!$item) {
-            return response()->json(['status' => 'error', 'message' => 'Registro no encontrado.'], 404);
-        }
-        $item->delete();
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Registro eliminado correctamente.'
-        ], 200);
+            'data' => $detalle,
+        ]);
     }
 }

@@ -4,15 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Iniciar Sesión - Ferretería Jack Sparkys</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>
-        .login-bg {
-            background-image: linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.92)), url('https://images.unsplash.com/photo-1581783898377-1c85bf937427?auto=format&fit=crop&w=1920&q=80');
-            background-size: cover;
-            background-position: center;
-        }
-    </style>
 </head>
 <body class="h-full login-bg font-sans antialiased text-slate-800 flex items-center justify-center p-4 min-h-screen">
     <div class="w-full max-w-md">

@@ -12,8 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('tseries', function (Blueprint $table) {
-            $table->id();
+            $table->id('id_serie');
+            $table->string('tipo_comprobante', 30);
+            $table->string('serie', 20);
+            $table->unsignedInteger('ultimo_numero')->default(0);
+            $table->boolean('activo')->default(true);
             $table->timestamps();
+            $table->unique(['tipo_comprobante', 'serie']);
         });
     }
 

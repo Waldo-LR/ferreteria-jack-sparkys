@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('tcategorias', function (Blueprint $table) {
-            $table->id();
+            $table->id('id_categoria');
+            $table->string('nombre', 150);
+            $table->boolean('activo')->default(true);
+            $table->dateTime('fecha_baja')->nullable();
             $table->timestamps();
         });
     }

@@ -2,50 +2,205 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Producto;
 use App\Models\Categoria;
 use App\Models\Marca;
+use App\Models\Producto;
+use App\Models\Usuario;
+use App\Services\MovimientoStockService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
+use Illuminate\Validation\Rules\Unique;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class ProductoController extends Controller
 {
-    public function index()
+    public function index(Request $request): View
     {
-        $productos = Producto::with(["categoria", "marca"])->where("activo", 1)->orderBy("nombre")->get();
-        $categorias = Categoria::where("activo", 1)->get();
-        $marcas = Marca::where("activo", 1)->get();
-        return view("productos.index", compact("productos", "categorias", "marcas"));
+        $user = $this->authorizeView();
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 25, 50])],
+            'sort' => ['nullable', Rule::in(['nombre', 'categoria', 'stock', 'precio_venta', 'precio_venta_mayor'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
+        ]);
+        $sort = $filters['sort'] ?? 'nombre';
+        $direction = $filters['direction'] ?? 'asc';
+        $perPage = (int) ($filters['per_page'] ?? 10);
+
+        $productosQuery = Producto::query()
+            ->with(['categoria', 'marca'])
+            ->where('activo', true)
+            ->when($filters['q'] ?? null, function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('codigo', 'like', '%'.$search.'%')
+                        ->orWhere('nombre', 'like', '%'.$search.'%')
+                        ->orWhereHas('categoria', fn (Builder $categoryQuery) => $categoryQuery->where('nombre', 'like', '%'.$search.'%'))
+                        ->orWhereHas('marca', fn (Builder $brandQuery) => $brandQuery->where('nombre', 'like', '%'.$search.'%'));
+                });
+            });
+
+        if ($sort === 'categoria') {
+            $productosQuery->orderBy(
+                Categoria::query()
+                    ->select('nombre')
+                    ->whereColumn('tcategorias.id_categoria', 'tproductos.id_categoria'),
+                $direction
+            );
+        } else {
+            $productosQuery->orderBy($sort, $direction);
+        }
+
+        $productos = $productosQuery
+            ->orderBy('id_producto')
+            ->paginate($perPage)
+            ->withQueryString();
+
+        return view('productos.index', [
+            'productos' => $productos,
+            'filters' => [
+                'q' => $filters['q'] ?? '',
+                'per_page' => $perPage,
+                'sort' => $sort,
+                'direction' => $direction,
+            ],
+            'canManageProducts' => $user->esAdmin() || $user->esAlmacenero(),
+        ]);
     }
 
-    public function store(Request $request)
+    public function edit(Producto $producto): View
     {
+        $this->authorizeManage();
+        abort_unless($producto->activo, 404);
+
+        return view('productos.edit', [
+            'producto' => $producto,
+            'categorias' => Categoria::query()->where('activo', true)->orderBy('nombre')->get(),
+            'marcas' => Marca::query()->where('activo', true)->orderBy('nombre')->get(),
+        ]);
+    }
+
+    public function store(Request $request, MovimientoStockService $movimientoStockService): RedirectResponse
+    {
+        $this->authorizeManage();
+
         $validated = $request->validate([
-            "codigo" => "required|string|max:50",
-            "id_categoria" => "required|integer",
-            "id_marca" => "required|integer",
-            "nombre" => "required|string|max:150",
-            "descripcion" => "nullable|string",
-            "stock" => "required|integer|min:0",
-            "stock_minimo" => "required|integer|min:0",
-            "precio_compra" => "required|numeric|min:0",
-            "precio_venta" => "required|numeric|min:0",
-            "precio_venta_mayor" => "nullable|numeric|min:0",
-            "cantidad_mayorista" => "nullable|integer|min:0",
-            "es_alquilable" => "nullable|boolean",
-            "precio_alquiler_dia" => "nullable|numeric|min:0",
+            ...$this->validationRules(),
+            'stock' => ['required', 'integer', 'min:0', 'max:4294967295'],
         ]);
 
-        $validated["activo"] = 1;
-        $validated["es_alquilable"] = $request->has("es_alquilable") ? 1 : 0;
-        Producto::create($validated);
+        $initialStock = (int) $validated['stock'];
+        $validated['precio_venta_mayor'] ??= $validated['precio_venta'];
+        $validated['cantidad_mayorista'] ??= 2;
+        $validated['es_alquilable'] = $request->boolean('es_alquilable');
+        $validated['precio_alquiler_dia'] ??= 0;
+        $validated['activo'] = true;
+        $validated['stock'] = 0;
 
-        return redirect()->route("productos.index")->with("success", "Producto registrado correctamente en el inventario.");
+        DB::transaction(function () use ($validated, $initialStock, $movimientoStockService): void {
+            $product = Producto::create($validated);
+
+            if ($initialStock > 0) {
+                $user = Auth::user();
+                abort_unless($user instanceof Usuario, 401);
+
+                $movimientoStockService->registrar(
+                    $product,
+                    $user,
+                    'entrada',
+                    $initialStock,
+                    'Stock inicial por creación de producto'
+                );
+            }
+        }, 3);
+
+        return back()->with('success', 'Producto registrado correctamente en el inventario.');
     }
 
-    public function destroy($id)
+    public function update(Request $request, Producto $producto): RedirectResponse
     {
-        $producto = Producto::findOrFail($id);
-        $producto->update(["activo" => 0]);
-        return redirect()->route("productos.index")->with("success", "Producto dado de baja correctamente.");
+        $this->authorizeManage();
+        abort_unless($producto->activo, 404);
+
+        $validated = $request->validate($this->validationRules($producto, true));
+        $validated['precio_venta_mayor'] ??= $validated['precio_venta'];
+        $validated['cantidad_mayorista'] ??= 2;
+        $validated['es_alquilable'] = $request->boolean('es_alquilable');
+        $validated['precio_alquiler_dia'] ??= 0;
+
+        $producto->update($validated);
+
+        return redirect()->route('productos.index')->with('success', 'Producto actualizado correctamente.');
+    }
+
+    public function destroy(Producto $producto): RedirectResponse
+    {
+        $this->authorizeManage();
+
+        if ($producto->stock > 0) {
+            throw ValidationException::withMessages([
+                'producto' => 'No se puede dar de baja un producto con existencias. Registra primero su salida o ajuste.',
+            ]);
+        }
+
+        $producto->update(['activo' => false, 'fecha_baja' => now()]);
+
+        return back()->with('success', 'Producto dado de baja correctamente.');
+    }
+
+    private function authorizeView(): Usuario
+    {
+        $user = Auth::user();
+
+        abort_unless(
+            $user instanceof Usuario && ($user->esAdmin() || $user->esAlmacenero() || $user->esVendedor()),
+            403
+        );
+
+        return $user;
+    }
+
+    private function authorizeManage(): void
+    {
+        $user = Auth::user();
+
+        abort_unless($user instanceof Usuario && ($user->esAdmin() || $user->esAlmacenero()), 403);
+    }
+
+    /**
+     * @return array<string, array<int, string|Exists|Unique>>
+     */
+    private function validationRules(?Producto $producto = null, bool $updating = false): array
+    {
+        $rules = [
+            'codigo' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('tproductos', 'codigo')->ignore($producto?->id_producto, 'id_producto'),
+            ],
+            'id_categoria' => ['required', 'integer', Rule::exists('tcategorias', 'id_categoria')->where('activo', true)],
+            'id_marca' => ['required', 'integer', Rule::exists('tmarcas', 'id_marca')->where('activo', true)],
+            'nombre' => ['required', 'string', 'max:150'],
+            'descripcion' => ['nullable', 'string', 'max:5000'],
+            'stock_minimo' => ['required', 'integer', 'min:0', 'max:4294967295'],
+            'precio_compra' => ['required', 'numeric', 'min:0', 'max:9999999999.99'],
+            'precio_venta' => ['required', 'numeric', 'min:0', 'max:9999999999.99'],
+            'precio_venta_mayor' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            'cantidad_mayorista' => ['nullable', 'integer', 'min:1', 'max:4294967295'],
+            'es_alquilable' => ['nullable', 'boolean'],
+            'precio_alquiler_dia' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+        ];
+
+        if ($updating) {
+            $rules['stock'] = ['prohibited'];
+        }
+
+        return $rules;
     }
 }

@@ -2,148 +2,157 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Cobranza;
-use App\Models\PagoCobranza;
 use App\Models\Alquiler;
 use App\Models\Caja;
+use App\Models\Cobranza;
+use App\Models\Configuracion;
+use App\Models\PagoCobranza;
+use App\Models\Usuario;
+use App\Services\AlquilerService;
+use App\Services\CajaService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class CobranzaController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, CajaService $cajaService): View
     {
-        $query = Cobranza::with(['alquiler.cliente', 'alquiler.producto', 'usuario'])->latest('id_cobranza');
-
-        if ($request->filled('buscar')) {
-            $b = $request->buscar;
-            $query->whereHas('alquiler.cliente', function ($q) use ($b) {
-                $q->where('nombres', 'like', "%$b%")
-                  ->orWhere('dni_ruc', 'like', "%$b%")
-                  ->orWhere('direccion', 'like', "%$b%");
-            })->orWhereHas('alquiler', function ($q) use ($b) {
-                $q->where('ubicacion_herramienta', 'like', "%$b%");
-            });
-        }
-
-        if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
-        }
-
-        $cobranzas = $query->paginate(15);
-        $totalPendiente = Cobranza::where('estado', 'pendiente')->sum('monto_mora');
-        $alquileresVencidos = Alquiler::with(['cliente', 'producto'])->where('estado', 'vencido')->get();
-
-        return view('cobranzas.index', compact('cobranzas', 'totalPendiente', 'alquileresVencidos'));
-    }
-    public function pagar(Request $request, $id)
-    {
-        $cobranza = Cobranza::with(['alquiler.cliente'])->findOrFail($id);
-
-        $request->validate([
-            'monto' => 'required|numeric|min:0.5',
-            'medio_pago' => 'required|in:efectivo,yape,deposito',
-            'observaciones' => 'nullable|string'
+        $filters = $request->validate([
+            'buscar' => ['nullable', 'string', 'max:100'],
+            'estado' => ['nullable', Rule::in(['pendiente', 'pagado'])],
+            'tipo' => ['nullable', Rule::in([
+                Cobranza::TIPO_ALQUILER,
+                Cobranza::TIPO_MORA,
+                Cobranza::TIPO_DANO,
+            ])],
         ]);
 
-        $caja = Caja::where('estado', 'abierta')->first();
-        if (!$caja) {
-            return back()->with('error', 'Debe haber una caja abierta para procesar el pago de mora.');
-        }
+        $query = Cobranza::query()
+            ->with(['alquiler.cliente', 'alquiler.producto', 'usuario', 'pagos.usuario'])
+            ->when($filters['buscar'] ?? null, function (Builder $query, string $search): void {
+                $query->whereHas('alquiler', function (Builder $alquilerQuery) use ($search): void {
+                    $alquilerQuery->where('ubicacion_herramienta', 'like', '%'.$search.'%')
+                        ->orWhereHas('cliente', fn (Builder $clientQuery) => $clientQuery
+                            ->where('nombres', 'like', '%'.$search.'%')
+                            ->orWhere('dni_ruc', 'like', '%'.$search.'%')
+                            ->orWhere('direccion', 'like', '%'.$search.'%'))
+                        ->orWhereHas('producto', fn (Builder $productQuery) => $productQuery
+                            ->where('nombre', 'like', '%'.$search.'%')
+                            ->orWhere('codigo', 'like', '%'.$search.'%'));
+                });
+            })
+            ->when($filters['estado'] ?? null, fn (Builder $query, string $status) => $query
+                ->where('estado', $status))
+            ->when($filters['tipo'] ?? null, fn (Builder $query, string $type) => $query
+                ->where('tipo', $type))
+            ->latest('id_cobranza');
 
-        DB::transaction(function () use ($cobranza, $request, $caja) {
-            $now = Carbon::now();
-            $monto = floatval($request->monto);
-
-            PagoCobranza::create([
-                'id_cobranza' => $cobranza->id_cobranza,
-                'id_usuario' => Auth::id() ?? 1,
-                'id_caja' => $caja->id_caja,
-                'monto' => $monto,
-                'medio_pago' => $request->medio_pago,
-                'observaciones' => $request->observaciones ?? 'Pago de saldo por mora',
-            ]);
-
-            $nuevoPagado = $cobranza->monto_pagado + $monto;
-            $estado = ($nuevoPagado >= $cobranza->monto_mora) ? 'pagado' : 'pendiente';
-
-            $cobranza->update([
-                'monto_pagado' => $nuevoPagado,
-                'estado' => $estado,
-            ]);
-
-            if ($request->medio_pago === 'efectivo') {
-                $caja->increment('total_ingresos', $monto);
-                $caja->increment('ingresos_efectivo', $monto);
-                $caja->increment('monto_final', $monto);
-            } else {
-                $caja->increment('total_ingresos', $monto);
-            }
-
-            DB::table('tauditoria')->insert([
-                'id_usuario' => Auth::id() ?? 1,
-                'accion' => 'PAGO_MORA_REGISTRADO',
-                'tabla_afectada' => 'tpagoscobranza',
-                'id_registro' => $cobranza->id_cobranza,
-                'detalle' => "Cobro de mora por S/ {$monto} a {$cobranza->alquiler->cliente->nombres}",
-                'ip' => $request->ip(),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-        });
-
-        return back()->with('success', '¡Pago de mora registrado y adicionado a la caja con éxito!');
+        return view('cobranzas.index', [
+            'cobranzas' => $query->paginate(15)->withQueryString(),
+            'totalPendiente' => (float) Cobranza::query()
+                ->where('estado', 'pendiente')
+                ->selectRaw('COALESCE(SUM(monto_mora - monto_pagado), 0) as saldo_pendiente')
+                ->value('saldo_pendiente'),
+            'moraPorcentaje' => (float) (Configuracion::query()->value('mora_porcentaje') ?? 15),
+            'cajaAlquileresAbierta' => $cajaService->cajaAbierta(Caja::TIPO_ALQUILERES) !== null,
+            'filters' => $filters,
+        ]);
     }
 
-    public function recuperar(Request $request, $id)
-    {
-        $alquiler = Alquiler::with(['producto', 'cliente'])->findOrFail($id);
-
-        $request->validate([
-            'observaciones' => 'required|string',
-            'estado_fisico' => 'required|string'
+    public function pagar(
+        Request $request,
+        Cobranza $cobranza,
+        CajaService $cajaService
+    ): RedirectResponse {
+        $datos = $request->validate([
+            'monto' => ['required', 'numeric', 'gt:0', 'max:9999999999.99', 'decimal:0,2'],
+            'medio_pago' => ['required', Rule::in(Caja::MEDIOS_PAGO)],
+            'observaciones' => ['nullable', 'string', 'max:1000'],
         ]);
+        $usuario = Auth::user();
 
-        DB::transaction(function () use ($alquiler, $request) {
-            $now = Carbon::now();
+        if (! ($usuario instanceof Usuario)) {
+            abort(401);
+        }
 
-            if ($alquiler->producto) {
-                $alquiler->producto->increment('stock', 1);
+        DB::transaction(function () use ($cobranza, $cajaService, $datos, $usuario): void {
+            $cobranzaBloqueada = Cobranza::query()
+                ->lockForUpdate()
+                ->findOrFail($cobranza->id_cobranza);
+            $caja = $cajaService->cajaAbierta(Caja::TIPO_ALQUILERES, true);
 
-                DB::table('tmovimientosstock')->insert([
-                    'id_producto' => $alquiler->id_producto,
-                    'id_usuario' => Auth::id() ?? 1,
-                    'tipo' => 'entrada',
-                    'cantidad' => 1,
-                    'stock_resultante' => $alquiler->producto->stock,
-                    'motivo' => "Recuperación de herramienta en campo #ALQ-{$alquiler->id_alquiler}",
-                    'referencia' => "REC-{$alquiler->id_alquiler}",
-                    'created_at' => $now,
-                    'updated_at' => $now,
+            if (! $caja) {
+                throw ValidationException::withMessages([
+                    'caja' => 'Abre la Caja de Alquileres/Cobranzas para registrar este pago.',
                 ]);
             }
 
-            $alquiler->update([
-                'fecha_devolucion_real' => Carbon::now()->toDateString(),
-                'estado' => 'devuelto',
-                'observaciones_devolucion' => "RECUPERADA EN CAMPO. Estado físico: {$request->estado_fisico}. Detalle: {$request->observaciones}",
-                'id_usuario_devolucion' => Auth::id() ?? 1,
+            $montoCentimos = (int) round((float) $datos['monto'] * 100);
+            $saldoCentimos = (int) round(
+                ((float) $cobranzaBloqueada->monto_mora - (float) $cobranzaBloqueada->monto_pagado) * 100
+            );
+
+            if ($cobranzaBloqueada->estado !== 'pendiente' || $montoCentimos > $saldoCentimos) {
+                throw ValidationException::withMessages([
+                    'monto' => 'El monto supera el saldo pendiente de esta cobranza o ya fue cancelada.',
+                ]);
+            }
+
+            PagoCobranza::create([
+                'id_cobranza' => $cobranzaBloqueada->id_cobranza,
+                'id_usuario' => $usuario->id_usuario,
+                'id_caja' => $caja->id_caja,
+                'monto' => number_format($montoCentimos / 100, 2, '.', ''),
+                'medio_pago' => $datos['medio_pago'],
+                'observaciones' => $datos['observaciones'] ?? 'Abono registrado en caja.',
             ]);
 
-            DB::table('tauditoria')->insert([
-                'id_usuario' => Auth::id() ?? 1,
-                'accion' => 'HERRAMIENTA_RECUPERADA',
-                'tabla_afectada' => 'talquileres',
-                'id_registro' => $alquiler->id_alquiler,
-                'detalle' => "Recuperación en obra de {$alquiler->producto->nombre}. Obs: {$request->observaciones}",
-                'ip' => $request->ip(),
-                'created_at' => $now,
-                'updated_at' => $now,
+            $nuevoPagadoCentimos = (int) round((float) $cobranzaBloqueada->monto_pagado * 100) + $montoCentimos;
+            $cobranzaBloqueada->update([
+                'monto_pagado' => number_format($nuevoPagadoCentimos / 100, 2, '.', ''),
+                'estado' => $nuevoPagadoCentimos >= (int) round((float) $cobranzaBloqueada->monto_mora * 100)
+                    ? 'pagado'
+                    : 'pendiente',
             ]);
+
+            if ($cobranzaBloqueada->tipo === Cobranza::TIPO_ALQUILER) {
+                $alquiler = Alquiler::query()
+                    ->lockForUpdate()
+                    ->findOrFail($cobranzaBloqueada->id_alquiler);
+                $alquiler->increment('monto_pagado', $montoCentimos / 100);
+            }
+
+            $cajaService->registrarIngreso($caja, $montoCentimos / 100, $datos['medio_pago']);
         });
 
-        return back()->with('success', 'Herramienta recuperada exitosamente y devuelta al stock del almacén.');
+        return redirect()->route('cobranzas.index', $request->only(['buscar', 'estado', 'tipo']))
+            ->with('success', 'Pago registrado en la Caja de Alquileres/Cobranzas.');
+    }
+
+    public function recuperar(
+        Request $request,
+        Alquiler $alquiler,
+        AlquilerService $alquilerService
+    ): RedirectResponse {
+        $datos = $request->validate([
+            'monto_dano' => ['required', 'numeric', 'min:0', 'max:9999999999.99', 'decimal:0,2'],
+            'observaciones_devolucion' => ['required', 'string', 'min:3', 'max:2000'],
+        ]);
+        $usuario = Auth::user();
+
+        if (! ($usuario instanceof Usuario)) {
+            abort(401);
+        }
+
+        $alquilerService->devolver($alquiler, $datos, $usuario, $request->ip());
+
+        return redirect()->route('cobranzas.index')
+            ->with('success', 'Recuperación y devolución registradas; se calcularon los cargos pendientes.');
     }
 }

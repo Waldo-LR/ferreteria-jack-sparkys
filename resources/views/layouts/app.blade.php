@@ -4,8 +4,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Panel - Ferretería Jack Sparkys')</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="h-full font-sans antialiased bg-slate-900 text-slate-100 flex flex-col min-h-screen">
@@ -95,6 +93,13 @@
                         <span>Panel Principal</span>
                     </a>
 
+                    @if($user->esAdmin())
+                        <a href="{{ route('reportes.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('reportes.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                            <i class="fa-solid fa-chart-column w-4 text-center"></i>
+                            <span>Reportes</span>
+                        </a>
+                    @endif
+
                     @if($user->esAdmin() || $user->esVendedor() || $user->esCajero())
                         <div class="pt-2 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ventas y Caja</div>
 
@@ -110,25 +115,48 @@
 
                         <a href="{{ url('/caja') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('caja.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
                             <i class="fa-solid fa-cash-register w-4 text-center"></i>
-                            <span>Control de Caja Chica</span>
+                            <span>Control de Caja</span>
+                        </a>
+                    @endif
+
+                    @if($user->esCobrador())
+                        <a href="{{ route('caja.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('caja.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                            <i class="fa-solid fa-cash-register w-4 text-center"></i>
+                            <span>Control de Caja</span>
                         </a>
                     @endif
 
                     @if($user->esAdmin() || $user->esVendedor() || $user->esCobrador())
                         <div class="pt-2 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alquileres y Moras</div>
 
-                        <a href="{{ url('/alquileres') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('alquileres.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                        <a href="{{ route('alquileres.create') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('alquileres.create') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
                             <i class="fa-solid fa-screwdriver-wrench w-4 text-center"></i>
-                            <span>Alquiler de Equipos</span>
+                            <span>Registrar Alquiler</span>
                         </a>
 
-                        <a href="{{ url('/cobranzas') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('cobranzas.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                        <a href="{{ route('alquileres.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('alquileres.index') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                            <i class="fa-solid fa-clock-rotate-left w-4 text-center"></i>
+                            <span>Historial de Alquileres</span>
+                        </a>
+
+                        <a href="{{ route('cobranzas.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('cobranzas.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
                             <i class="fa-solid fa-hand-holding-dollar w-4 text-center"></i>
-                            <span>Gestión de Cobranzas</span>
-                            <span class="ml-auto bg-rose-500/20 text-rose-300 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-rose-500/30">Moras</span>
+                            <span>Historial de Moras/Cobranzas</span>
                         </a>
                     @endif                    @if($user->esAdmin() || $user->esVendedor() || $user->esAlmacenero())
                         <div class="pt-2 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Inventario & Logística</div>
+
+                        <a href="{{ route('inventario.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('inventario.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                            <i class="fa-solid fa-warehouse w-4 text-center"></i>
+                            <span>Control de Inventario</span>
+                        </a>
+
+                        @if($user->esAdmin() || $user->esAlmacenero())
+                            <a href="{{ route('compras.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('compras.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
+                                <i class="fa-solid fa-cart-flatbed w-4 text-center"></i>
+                                <span>Compras y Proveedores</span>
+                            </a>
+                        @endif
 
                         <a href="{{ url('/productos') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('productos.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
                             <i class="fa-solid fa-boxes-stacked w-4 text-center"></i>

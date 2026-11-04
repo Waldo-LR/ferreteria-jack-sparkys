@@ -17,6 +17,13 @@
         </div>
     </div>
 
+    @unless($cajaActual)
+        <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <span>La caja de Ventas está cerrada. Ábrela antes de registrar una venta.</span>
+            <a href="{{ route('caja.index') }}" class="font-bold underline underline-offset-2">Ir a Control de Caja</a>
+        </div>
+    @endunless
+
     <!-- Formulario POS de 3 Paneles -->
     <form id="formPOS" action="{{ route('ventas.store') }}" method="POST" class="space-y-6">
         @csrf
@@ -160,7 +167,7 @@
                     </div>
 
                     <div class="pt-2 space-y-2">
-                        <button type="submit" class="w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-sm transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
+                        <button type="submit" {{ $cajaActual ? '' : 'disabled' }} class="w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black rounded-xl text-sm transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2">
                             <i class="fa-solid fa-floppy-disk"></i>
                             <span>Guardar Venta & Generar Comprobante</span>
                         </button>

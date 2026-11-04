@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('tmarcas', function (Blueprint $table) {
-            $table->id();
+            $table->id('id_marca');
+            $table->string('nombre', 100);
+            $table->boolean('activo')->default(true);
+            $table->dateTime('fecha_baja')->nullable();
             $table->timestamps();
         });
     }

@@ -11,8 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('tpagoscobranzas', function (Blueprint $table) {
-            $table->id();
+        Schema::create('tpagoscobranza', function (Blueprint $table) {
+            $table->id('id_pago');
+            $table->foreignId('id_cobranza')->constrained('tcobranzas', 'id_cobranza')->cascadeOnDelete();
+            $table->foreignId('id_usuario')->constrained('tusuarios', 'id_usuario')->restrictOnDelete();
+            $table->foreignId('id_caja')->constrained('tcaja', 'id_caja')->restrictOnDelete();
+            $table->decimal('monto', 12, 2);
+            $table->string('medio_pago', 30);
+            $table->text('observaciones')->nullable();
             $table->timestamps();
         });
     }
@@ -22,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('tpagoscobranzas');
+        Schema::dropIfExists('tpagoscobranza');
     }
 };

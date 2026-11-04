@@ -12,7 +12,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('tclientes', function (Blueprint $table) {
-            $table->id();
+            $table->id('id_cliente');
+            $table->string('tipo_documento', 20);
+            $table->string('dni_ruc', 20)->unique();
+            $table->string('nombres', 150);
+            $table->string('email', 100)->nullable();
+            $table->string('telefono', 20)->nullable();
+            $table->string('direccion', 200)->nullable();
+            $table->date('fecha_nacimiento')->nullable();
+            $table->boolean('activo')->default(true);
+            $table->dateTime('fecha_baja')->nullable();
             $table->timestamps();
         });
     }

@@ -3,63 +3,81 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCompraRequest;
+use App\Http\Requests\StorePagoCompraRequest;
 use App\Models\Compra;
-use Illuminate\Http\Request;
+use App\Models\Usuario;
+use App\Services\CompraService;
+use Illuminate\Http\JsonResponse;
 
 class CompraController extends Controller
 {
-    public function index()
+    public function index(): JsonResponse
     {
-        $data = Compra::all();
+        $compras = Compra::query()
+            ->with(['proveedor', 'usuario', 'detalles.producto'])
+            ->withSum('pagos as monto_pagado', 'monto')
+            ->latest('fecha_compra')
+            ->latest('id_compra')
+            ->paginate(25);
+
         return response()->json([
             'status' => 'success',
-            'data' => $data
-        ], 200);
+            'data' => $compras,
+        ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreCompraRequest $request, CompraService $compraService): JsonResponse
     {
-        $item = Compra::create($request->all());
+        $usuario = $request->user();
+        abort_unless($usuario instanceof Usuario, 401);
+
+        $compra = $compraService->registrarCompra($request->validated(), $usuario);
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Registro creado correctamente.',
-            'data' => $item
+            'message' => 'Compra recibida; el inventario y los pagos fueron actualizados.',
+            'data' => $compra,
         ], 201);
     }
 
-    public function show($id)
+    public function show(Compra $compra): JsonResponse
     {
-        $item = Compra::find($id);
-        if (!$item) {
-            return response()->json(['status' => 'error', 'message' => 'Registro no encontrado.'], 404);
-        }
-        return response()->json(['status' => 'success', 'data' => $item], 200);
-    }
-
-    public function update(Request $request, $id)
-    {
-        $item = Compra::find($id);
-        if (!$item) {
-            return response()->json(['status' => 'error', 'message' => 'Registro no encontrado.'], 404);
-        }
-        $item->update($request->all());
         return response()->json([
             'status' => 'success',
-            'message' => 'Registro actualizado correctamente.',
-            'data' => $item
-        ], 200);
+            'data' => $this->cargarCompra($compra),
+        ]);
     }
 
-    public function destroy($id)
-    {
-        $item = Compra::find($id);
-        if (!$item) {
-            return response()->json(['status' => 'error', 'message' => 'Registro no encontrado.'], 404);
-        }
-        $item->delete();
+    public function storePayment(
+        StorePagoCompraRequest $request,
+        Compra $compra,
+        CompraService $compraService
+    ): JsonResponse {
+        $usuario = $request->user();
+        abort_unless($usuario instanceof Usuario, 401);
+
+        $movimiento = $compraService->registrarPago(
+            $compra,
+            $request->validated('monto'),
+            $request->validated('medio_pago'),
+            $usuario
+        );
+
         return response()->json([
             'status' => 'success',
-            'message' => 'Registro eliminado correctamente.'
-        ], 200);
+            'message' => 'Pago registrado en la caja de ventas.',
+            'data' => [
+                'pago' => $movimiento,
+                'compra' => $this->cargarCompra($compra->refresh()),
+            ],
+        ], 201);
+    }
+
+    private function cargarCompra(Compra $compra): Compra
+    {
+        return $compra
+            ->load(['proveedor', 'usuario', 'detalles.producto', 'pagos.usuario', 'pagos.caja'])
+            ->loadSum('pagos as monto_pagado', 'monto');
     }
 }

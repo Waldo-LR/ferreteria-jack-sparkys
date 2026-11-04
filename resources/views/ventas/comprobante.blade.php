@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <title>Comprobante {{ $venta->serie }}-{{ str_pad($venta->numero, 6, '0', STR_PAD_LEFT) }}</title>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; font-size: 12px; margin: 0; padding: 20px; background: #f8fafc; }
+        @page { margin: 18mm; }
+        body { font-family: 'Courier New', Courier, monospace; font-size: 12px; margin: 0; padding: 20px; background: #f8fafc; color: #111827; }
         .ticket { max-width: 380px; margin: 0 auto; background: #fff; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
@@ -12,14 +13,17 @@
         .divider { border-top: 1px dashed #000; margin: 10px 0; }
         .table { width: 100%; border-collapse: collapse; margin: 10px 0; }
         .table th, .table td { text-align: left; padding: 4px 0; }
-        .btn-print { display: block; width: 100%; padding: 10px; background: #f59e0b; color: #000; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin-top: 15px; }
-        @media print { .btn-print { display: none; } body { background: none; padding: 0; } .ticket { border: none; box-shadow: none; width: 100%; } }
+        .receipt-actions { display: flex; gap: 8px; margin-top: 15px; }
+        .receipt-actions a, .receipt-actions button { flex: 1; padding: 10px; text-align: center; text-decoration: none; font: bold 12px Arial, sans-serif; border: none; border-radius: 6px; cursor: pointer; }
+        .btn-print { background: #f59e0b; color: #000; }
+        .btn-pdf { background: #0f172a; color: #fff; }
+        @media print { .receipt-actions { display: none !important; } body { background: none; padding: 0; } .ticket { border: none; box-shadow: none; width: 100%; max-width: none; padding: 0; } }
     </style>
 </head>
 <body>
     <div class="ticket">
         <div class="text-center">
-            <h2 style="margin: 0;">FERRETERÍA JACK SPARKY'S</h2>
+            <h2 style="margin: 0;">{{ $config->razon_social ?? "FERRETERÍA JACK SPARKY'S" }}</h2>
             <p style="margin: 4px 0;">RUC: {{ $config->ruc ?? '20609876543' }}</p>
             <p style="margin: 2px 0; font-size: 11px;">{{ $config->direccion ?? 'Av. Los Héroes 123, Lima' }}</p>
             <p style="margin: 2px 0; font-size: 11px;">Telf: {{ $config->telefono ?? '987654321' }}</p>
@@ -41,6 +45,15 @@
             <p style="margin: 2px 0;"><strong>Cliente:</strong> {{ $venta->cliente->nombres ?? 'Cliente General' }}</p>
             <p style="margin: 2px 0;"><strong>DNI/RUC:</strong> {{ $venta->cliente->dni_ruc ?? '00000000' }}</p>
             <p style="margin: 2px 0;"><strong>Medio Pago:</strong> {{ strtoupper($venta->medio_pago) }}</p>
+            @if ($venta->usuario)
+                <p style="margin: 2px 0;"><strong>Atendido por:</strong> {{ $venta->usuario->nombre }}</p>
+            @endif
+            @if ($venta->estado === 'anulada')
+                <p style="margin: 6px 0; color: #b91c1c; font-weight: bold;">COMPROBANTE ANULADO</p>
+                @if ($venta->motivo_anulacion)
+                    <p style="margin: 2px 0;"><strong>Motivo:</strong> {{ $venta->motivo_anulacion }}</p>
+                @endif
+            @endif
         </div>
 
         <div class="divider"></div>
@@ -101,7 +114,17 @@
             <p style="margin: 6px 0;" class="bold">¡Gracias por su preferencia!</p>
         </div>
 
-        <button onclick="window.print()" class="btn-print">🖨️ IMPRIMIR COMPROBANTE</button>
+        @unless ($pdf ?? false)
+            <div class="receipt-actions">
+                <button type="button" onclick="window.print()" class="btn-print">IMPRIMIR COMPROBANTE</button>
+                <a href="{{ route('ventas.pdf', $venta->id_venta) }}" class="btn-pdf">DESCARGAR PDF</a>
+            </div>
+        @endunless
     </div>
+    @if (($autoPrint ?? false) && ! ($pdf ?? false))
+        <script>
+            window.addEventListener('load', () => window.print());
+        </script>
+    @endif
 </body>
 </html>
