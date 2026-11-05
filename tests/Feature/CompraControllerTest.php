@@ -67,7 +67,8 @@ class CompraControllerTest extends TestCase
         $this->actingAs($administrator)
             ->get(route('compras.index'))
             ->assertOk()
-            ->assertSee('Compras y Proveedores')
+            ->assertSee('Compras')
+            ->assertSee('Cambiar de tema')
             ->assertSee('Saldo pendiente')
             ->assertSee('F001-000001');
     }

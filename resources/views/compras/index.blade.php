@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Compras y Proveedores - Ferretería Jack Sparkys S.A.C.')
+@section('title', 'Compras - Ferretería Jack Sparkys S.A.C.')
 
 @section('content')
 <div class="space-y-6">
@@ -8,7 +8,7 @@
         <div>
             <h1 class="flex items-center gap-2 text-xl font-bold text-slate-100">
                 <i class="fa-solid fa-cart-flatbed text-amber-400"></i>
-                Compras y Proveedores
+                Compras
             </h1>
             <p class="mt-1 text-sm text-slate-400">Recepción de mercadería, actualización de costos y seguimiento de pagos.</p>
         </div>

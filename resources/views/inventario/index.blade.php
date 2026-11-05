@@ -13,7 +13,7 @@
             <p class="mt-1 text-sm text-slate-400">Consulta existencias y mantén trazabilidad de cada movimiento.</p>
         </div>
         @if($canManageInventory)
-            <a href="#registrar-producto" class="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400">
+            <a href="{{ route('compras.index') }}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400">
                 <i class="fa-solid fa-plus"></i>
                 Registrar producto
             </a>

@@ -1,13 +1,22 @@
 <!DOCTYPE html>
-<html lang="es" class="h-full bg-slate-900">
+<html lang="es" class="h-full overflow-hidden bg-slate-900" data-theme-storage-key="jack-sparkys-theme-{{ Auth::id() ?? 'guest' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Panel - Ferretería Jack Sparkys')</title>
+    <script>
+        try {
+            if (localStorage.getItem(document.documentElement.dataset.themeStorageKey) === 'cobalt') {
+                document.documentElement.dataset.theme = 'cobalt';
+            }
+        } catch (error) {
+            console.error('No se pudo cargar la preferencia de tema:', error);
+        }
+    </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="h-full font-sans antialiased bg-slate-900 text-slate-100 flex flex-col min-h-screen">
-    <header class="bg-slate-800 border-b border-slate-700/80 sticky top-0 z-40 px-4 lg:px-6 py-2.5 flex items-center justify-between shadow-md">
+<body class="h-dvh overflow-hidden font-sans antialiased bg-slate-900 text-slate-100 flex flex-col">
+    <header class="shrink-0 bg-slate-800 border-b border-slate-700/80 sticky top-0 z-40 px-4 lg:px-6 py-2.5 flex items-center justify-between shadow-md">
         <div class="flex items-center gap-3">
             <button onclick="toggleSidebar()" class="text-slate-300 hover:text-white p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition lg:hidden">
                 <i class="fa-solid fa-bars"></i>
@@ -54,11 +63,24 @@
                 </span>
             </div>
 
-            <button onclick="abrirModalPerfil()" class="relative p-1 rounded-xl bg-slate-700/60 border border-slate-600 hover:border-amber-500 transition" title="Configurar Perfil">
-                <div class="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs">
-                    {{ strtoupper(substr($user->nombre ?? 'U', 0, 2)) }}
+            <div class="relative group/profile">
+                <button type="button" onclick="abrirModalPerfil()" class="relative p-1 rounded-xl bg-slate-700/60 border border-slate-600 hover:border-amber-500 transition" title="Configurar Perfil" aria-label="Configurar perfil" aria-controls="profile-options">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xs">
+                        {{ strtoupper(substr($user->nombre ?? 'U', 0, 2)) }}
+                    </div>
+                </button>
+                <div id="profile-options" class="invisible absolute right-0 top-full z-50 w-56 pt-2 opacity-0 transition duration-150 group-hover/profile:visible group-hover/profile:opacity-100 group-focus-within/profile:visible group-focus-within/profile:opacity-100">
+                    <button type="button" data-theme-switcher aria-pressed="false" class="flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-800 p-3 text-left shadow-xl transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-300">
+                            <i class="fa-solid fa-palette"></i>
+                        </span>
+                        <span class="flex flex-col gap-0.5">
+                            <span class="text-xs font-bold text-slate-100">Cambiar de tema</span>
+                            <span data-theme-description class="text-[10px] text-slate-400">Activar tema cobalto</span>
+                        </span>
+                    </button>
                 </div>
-            </button>
+            </div>
 
             <form action="{{ route('logout') }}" method="POST" class="inline">
                 @csrf
@@ -68,8 +90,8 @@
                 </button>
             </form>
         </div>
-    </header>    <div class="flex flex-1 overflow-hidden">
-        <aside id="sidebar" class="w-64 bg-slate-800 border-r border-slate-700/80 flex-shrink-0 flex flex-col justify-between overflow-y-auto transition-all duration-300 hidden lg:flex">
+    </header>    <div class="flex min-h-0 flex-1 overflow-hidden">
+        <aside id="sidebar" class="min-h-0 w-64 bg-slate-800 border-r border-slate-700/80 flex-shrink-0 flex flex-col justify-between overflow-y-auto transition-all duration-300 hidden lg:flex">
             <div>
                 <div class="p-4 border-b border-slate-700/60 bg-slate-850 flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center font-extrabold text-sm shadow">
@@ -154,7 +176,7 @@
                         @if($user->esAdmin() || $user->esAlmacenero())
                             <a href="{{ route('compras.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('compras.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
                                 <i class="fa-solid fa-cart-flatbed w-4 text-center"></i>
-                                <span>Compras y Proveedores</span>
+                                <span>Compras</span>
                             </a>
                         @endif
 
@@ -183,7 +205,7 @@
 
                     <a href="{{ url('/clientes') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition {{ request()->routeIs('clientes.*') ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20' : 'text-slate-300 hover:bg-slate-700/60 hover:text-white' }}">
                         <i class="fa-solid fa-users w-4 text-center"></i>
-                        <span>Directorio de Clientes</span>
+                        <span>Gestión de Clientes</span>
                     </a>
 
                     @if($user->esAdmin())
@@ -219,7 +241,7 @@
             </div>
         </aside>
 
-        <main class="flex-1 overflow-y-auto bg-slate-900 p-4 lg:p-6 flex flex-col">
+        <main class="min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-900 p-4 lg:p-6 flex flex-col">
             @if(session('success'))
                 <div class="mb-5 p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-sm flex items-center justify-between shadow-lg">
                     <div class="flex items-center gap-2.5">
@@ -261,6 +283,18 @@
                 </div>
                 <button onclick="cerrarModalPerfil()" class="text-slate-400 hover:text-white">
                     <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="px-5 pt-5">
+                <button type="button" data-theme-switcher aria-pressed="false" class="flex w-full items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 p-3 text-left transition hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-300">
+                        <i class="fa-solid fa-palette"></i>
+                    </span>
+                    <span class="flex flex-col gap-0.5">
+                        <span class="text-xs font-bold text-slate-100">Cambiar de tema</span>
+                        <span data-theme-description class="text-[10px] text-slate-400">Activar tema cobalto</span>
+                    </span>
                 </button>
             </div>
 

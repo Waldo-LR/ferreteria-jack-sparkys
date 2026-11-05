@@ -82,8 +82,32 @@ class ProductoControllerTest extends TestCase
             ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)
             ->assertDontSee('<script>alert(1)</script>', false)
             ->assertSee('Agotado')
-            ->assertSee('registrar-producto')
+            ->assertSee(route('compras.index'), false)
             ->assertViewHas('canManageProducts', true);
+    }
+
+    public function test_catalog_shows_edit_and_deactivate_actions_for_every_product(): void
+    {
+        $administrator = $this->createUser('Administrador', 1);
+        $category = Categoria::create(['nombre' => 'Herramientas', 'activo' => true]);
+        $brand = Marca::create(['nombre' => 'Marca de prueba', 'activo' => true]);
+        $stockedProduct = $this->createProduct('CAT-STOCKED', 'Taladro con stock', 5, $category, $brand);
+        $emptyProduct = $this->createProduct('CAT-EMPTY', 'Taladro sin stock', 0, $category, $brand);
+
+        $this->actingAs($administrator)
+            ->get(route('productos.index'))
+            ->assertOk()
+            ->assertSee('data-product-search', false)
+            ->assertSee('id="product-search-input"', false)
+            ->assertSee('class="w-full table-fixed text-left text-sm"', false)
+            ->assertSee(route('productos.edit', $stockedProduct), false)
+            ->assertSee(route('productos.edit', $emptyProduct), false)
+            ->assertSee(route('productos.destroy', $stockedProduct->id_producto), false)
+            ->assertSee(route('productos.destroy', $emptyProduct->id_producto), false)
+            ->assertSee('aria-label="Inhabilitar o dar de baja Taladro con stock"', false)
+            ->assertSee('aria-label="Inhabilitar o dar de baja Taladro sin stock"', false)
+            ->assertDontSee('Ver inventario')
+            ->assertDontSee('fa-eye', false);
     }
 
     public function test_catalog_can_sort_products_by_category(): void

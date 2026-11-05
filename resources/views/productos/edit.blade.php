@@ -26,7 +26,7 @@
         </div>
     @endif
 
-    <form action="{{ route('productos.update', $producto) }}" method="POST" class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800">
+<form action="{{ route('productos.update', $producto) }}" method="POST" enctype="multipart/form-data" class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800">
         @csrf
         @method('PUT')
         <div class="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -82,7 +82,7 @@
                 <input type="number" name="cantidad_mayorista" value="{{ old('cantidad_mayorista', $producto->cantidad_mayorista) }}" min="1" step="1" class="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:border-amber-400 focus:outline-none">
             </label>
             <label class="space-y-1.5 text-xs font-semibold text-slate-300 sm:col-span-2 xl:col-span-3">
-                <span>Descripción</span>
+<span>Imagen del producto</span> @if($producto->imagen) <img src="{{ asset('storage/' . ltrim($producto->imagen, '/')) }}" alt="Imagen actual de {{ $producto->nombre }}" class="mb-2 h-20 w-20 rounded-xl border border-slate-600 object-cover"> @endif <input type="file" name="imagen" accept="image/jpeg,image/png,image/webp" class="block w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded-lg file:border-0 file:bg-amber-500 file:px-3 file:py-1.5 file:font-bold file:text-slate-950"> <span class="block font-normal text-slate-500">JPG, PNG o WebP. Máximo 2 MB.</span> </label> <label class="space-y-1.5 text-xs font-semibold text-slate-300 sm:col-span-2 xl:col-span-3"> <span>Descripción</span>
                 <textarea name="descripcion" rows="3" maxlength="5000" class="w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 focus:border-amber-400 focus:outline-none">{{ old('descripcion', $producto->descripcion) }}</textarea>
             </label>
             <div class="flex flex-col gap-4 sm:col-span-2 sm:flex-row sm:items-center xl:col-span-3">

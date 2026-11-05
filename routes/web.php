@@ -73,10 +73,11 @@ Route::middleware(['auth', 'check.rol:admin,almacenero'])->group(function () {
 });
 
 // Módulos CRUD de Administración
-Route::middleware('auth')->resource('productos', ProductoController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
+Route::middleware('auth')->get('/productos/{producto}/imagen', [ProductoController::class, 'image'])->name('productos.image');
+Route::middleware('auth')->resource('productos', ProductoController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
 Route::resource('categorias', CategoriaController::class)->only(['index', 'store', 'destroy']);
 Route::resource('marcas', MarcaController::class)->only(['index', 'store', 'destroy']);
-Route::resource('clientes', ClienteController::class)->only(['index', 'store', 'destroy']);
+Route::middleware('auth')->resource('clientes', ClienteController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
 Route::resource('proveedores', ProveedorController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
 Route::middleware('auth')->resource('usuarios', UsuarioController::class)->only(['index', 'store', 'edit', 'update', 'destroy']);
 Route::middleware('auth')->group(function () {

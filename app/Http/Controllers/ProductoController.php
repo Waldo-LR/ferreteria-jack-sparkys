@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Rules\Unique;
@@ -85,6 +86,23 @@ class ProductoController extends Controller
         ]);
     }
 
+    public function image(Producto $producto): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        abort_unless($producto->imagen, 404);
+
+        return response()->file(Storage::disk('public')->path($producto->imagen));
+    }
+
+    public function create(): View
+    {
+        $this->authorizeManage();
+
+        return view('productos.create', [
+            'categorias' => Categoria::query()->where('activo', true)->orderBy('nombre')->get(),
+            'marcas' => Marca::query()->where('activo', true)->orderBy('nombre')->get(),
+        ]);
+    }
+
     public function store(Request $request, MovimientoStockService $movimientoStockService): RedirectResponse
     {
         $this->authorizeManage();
@@ -94,6 +112,9 @@ class ProductoController extends Controller
             'stock' => ['required', 'integer', 'min:0', 'max:4294967295'],
         ]);
 
+        if ($request->hasFile('imagen')) {
+            $validated['imagen'] = $request->file('imagen')->store('productos', 'public');
+        }
         $initialStock = (int) $validated['stock'];
         $validated['precio_venta_mayor'] ??= $validated['precio_venta'];
         $validated['cantidad_mayorista'] ??= 2;
@@ -128,6 +149,12 @@ class ProductoController extends Controller
         abort_unless($producto->activo, 404);
 
         $validated = $request->validate($this->validationRules($producto, true));
+        if ($request->hasFile('imagen')) {
+            if ($producto->imagen) {
+                Storage::disk('public')->delete($producto->imagen);
+            }
+            $validated['imagen'] = $request->file('imagen')->store('productos', 'public');
+        }
         $validated['precio_venta_mayor'] ??= $validated['precio_venta'];
         $validated['cantidad_mayorista'] ??= 2;
         $validated['es_alquilable'] = $request->boolean('es_alquilable');
@@ -194,6 +221,7 @@ class ProductoController extends Controller
             'precio_venta_mayor' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
             'cantidad_mayorista' => ['nullable', 'integer', 'min:1', 'max:4294967295'],
             'es_alquilable' => ['nullable', 'boolean'],
+            'imagen' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'precio_alquiler_dia' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
         ];
 

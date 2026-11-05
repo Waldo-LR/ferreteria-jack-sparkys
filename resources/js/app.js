@@ -1,6 +1,122 @@
 import Chart from 'chart.js/auto';
 
 document.addEventListener('DOMContentLoaded', () => {
+    const themeSwitchers = document.querySelectorAll('[data-theme-switcher]');
+
+    if (themeSwitchers.length > 0) {
+        const preferenceKey = document.documentElement.dataset.themeStorageKey;
+
+        const updateThemeSwitcher = () => {
+            const isCobaltTheme = document.documentElement.dataset.theme === 'cobalt';
+
+            themeSwitchers.forEach((themeSwitcher) => {
+                themeSwitcher.setAttribute('aria-pressed', String(isCobaltTheme));
+                themeSwitcher.setAttribute('aria-label', isCobaltTheme
+                    ? 'Cambiar de tema. Restaurar tema predeterminado'
+                    : 'Cambiar de tema. Activar tema cobalto');
+                themeSwitcher.querySelector('[data-theme-description]').textContent = isCobaltTheme
+                    ? 'Restaurar tema predeterminado'
+                    : 'Activar tema cobalto';
+            });
+        };
+
+        themeSwitchers.forEach((themeSwitcher) => {
+            themeSwitcher.addEventListener('click', () => {
+                const isCobaltTheme = document.documentElement.dataset.theme !== 'cobalt';
+
+                if (isCobaltTheme) {
+                    document.documentElement.dataset.theme = 'cobalt';
+                } else {
+                    delete document.documentElement.dataset.theme;
+                }
+
+                try {
+                    if (isCobaltTheme) {
+                        window.localStorage.setItem(preferenceKey, 'cobalt');
+                    } else {
+                        window.localStorage.removeItem(preferenceKey);
+                    }
+                } catch (error) {
+                    console.error('No se pudo guardar la preferencia de tema:', error);
+                }
+
+                updateThemeSwitcher();
+            });
+        });
+
+        updateThemeSwitcher();
+    }
+
+    const productSearchForm = document.querySelector('[data-product-search]');
+
+    if (productSearchForm) {
+        const searchInput = productSearchForm.querySelector('[name="q"]');
+        const searchStatus = document.getElementById('product-search-status');
+        let searchTimeout;
+        let searchController;
+        let searchRequest = 0;
+
+        searchInput.addEventListener('input', () => {
+            window.clearTimeout(searchTimeout);
+            searchController?.abort();
+
+            const request = ++searchRequest;
+            searchTimeout = window.setTimeout(async () => {
+                const url = new URL(productSearchForm.action, window.location.origin);
+                const currentUrl = new URL(window.location.href);
+
+                for (const [name, value] of new FormData(productSearchForm)) {
+                    if (value !== '') {
+                        url.searchParams.set(name, value);
+                    }
+                }
+
+                if (searchInput.value === (currentUrl.searchParams.get('q') ?? '')) {
+                    searchStatus.textContent = '';
+                    return;
+                }
+
+                searchController = new AbortController();
+                searchStatus.textContent = 'Buscando productos...';
+
+                try {
+                    const response = await fetch(url, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        signal: searchController.signal,
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`La búsqueda respondió con estado ${response.status}.`);
+                    }
+
+                    const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+                    const updatedResults = responseDocument.getElementById('catalog-results');
+                    const currentResults = document.getElementById('catalog-results');
+
+                    if (request !== searchRequest) {
+                        return;
+                    }
+
+                    if (!updatedResults || !currentResults) {
+                        throw new Error('No se pudieron actualizar los resultados del catálogo.');
+                    }
+
+                    currentResults.replaceWith(updatedResults);
+                    window.history.replaceState({}, '', url);
+                    document.getElementById('clear-catalog-search').classList.toggle('hidden', searchInput.value === '');
+                    searchStatus.textContent = 'Resultados actualizados.';
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        return;
+                    }
+
+                    console.error('Error al buscar productos:', error);
+                    searchStatus.textContent = 'No se pudieron actualizar los resultados. Intenta nuevamente.';
+                }
+            }, 300);
+        });
+    }
+
     const data = window.dashboardChartData;
 
     if (!data) {
